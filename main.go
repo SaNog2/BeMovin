@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 )
@@ -15,6 +16,7 @@ func main() {
 	mux.HandleFunc("/", handlePage)
 
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Println("Hitted Server")
 		w.WriteHeader(200)
 		w.Write([]byte("OK"))
 	})
