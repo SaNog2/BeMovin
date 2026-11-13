@@ -1,12 +1,23 @@
 package main
 
 import (
-	"fmt"
+	"context"
 	"log"
 	"net/http"
+
+	"github.com/jackc/pgx/v5"
+
+	"github.com/SaNog2/BeMovin/internal/config"
 )
 
 func main() {
+	cfg := config.Load()
+	conn, err := pgx.Connect(context.Background(), cfg.DBURL)
+	if err != nil {
+		log.Fatal("Error could not connect to Database")
+	}
+	defer conn.Close(context.Background())
+
 	mux := http.NewServeMux()
 	s := &http.Server{
 		Addr:    ":8080",
@@ -14,12 +25,6 @@ func main() {
 	}
 
 	mux.HandleFunc("/", handlePage)
-
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Println("Hitted Server")
-		w.WriteHeader(200)
-		w.Write([]byte("OK"))
-	})
 
 	log.Fatal(s.ListenAndServe())
 }
