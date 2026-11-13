@@ -16,6 +16,7 @@ func main() {
 	if err != nil {
 		log.Fatal("Error could not connect to Database")
 	}
+
 	defer conn.Close(context.Background())
 
 	mux := http.NewServeMux()
