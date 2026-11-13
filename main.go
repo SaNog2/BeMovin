@@ -24,7 +24,6 @@ func main() {
 		Addr:    ":8080",
 		Handler: mux,
 	}
-
 	mux.HandleFunc("/", handlePage)
 
 	log.Fatal(s.ListenAndServe())
