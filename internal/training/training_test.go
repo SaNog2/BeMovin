@@ -1,0 +1,80 @@
+package training
+
+import (
+	"encoding/json"
+	"strings"
+	"testing"
+)
+
+const valid = `{
+  "title": "6x400m intervals",
+  "date": "2026-11-15",
+  "blocks": [
+    {"type": "step", "kind": "warmup", "duration": {"time_s": 900}, "zone": 2},
+    {"type": "repeat", "count": 3, "blocks": [
+      {"type": "repeat", "count": 2, "blocks": [
+        {"type": "step", "kind": "work", "duration": {"distance_m": 400}, "zone": 5},
+        {"type": "step", "kind": "recovery", "duration": {"time_s": 90}, "zone": 1}
+      ]},
+      {"type": "step", "kind": "recovery", "duration": {"time_s": 180}}
+    ]},
+    {"type": "step", "kind": "cooldown", "duration": {"time_s": 600}}
+  ]
+}`
+
+func parse(t *testing.T, s string) Training {
+	t.Helper()
+	var tr Training
+	if err := json.Unmarshal([]byte(s), &tr); err != nil {
+		t.Fatal(err)
+	}
+	return tr
+}
+
+func TestValidateOK(t *testing.T) {
+	tr := parse(t, valid)
+	if err := tr.Validate(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateErrors(t *testing.T) {
+	tests := []struct {
+		name, json, want string
+	}{
+		{"missing title", `{"date":"2026-11-15","blocks":[{"type":"step","kind":"work","duration":{"time_s":60}}]}`, "title is required"},
+		{"bad date", `{"title":"x","date":"15/11/2026","blocks":[{"type":"step","kind":"work","duration":{"time_s":60}}]}`, "date must be"},
+		{"no blocks", `{"title":"x","date":"2026-11-15","blocks":[]}`, "at least one block"},
+		{"unknown type", `{"title":"x","date":"2026-11-15","blocks":[{"type":"run"}]}`, `type must be`},
+		{"bad kind", `{"title":"x","date":"2026-11-15","blocks":[{"type":"step","kind":"sprint","duration":{"time_s":60}}]}`, "kind must be"},
+		{"no duration", `{"title":"x","date":"2026-11-15","blocks":[{"type":"step","kind":"work"}]}`, "duration is required"},
+		{"both durations", `{"title":"x","date":"2026-11-15","blocks":[{"type":"step","kind":"work","duration":{"time_s":60,"distance_m":400}}]}`, "not both"},
+		{"negative time", `{"title":"x","date":"2026-11-15","blocks":[{"type":"step","kind":"work","duration":{"time_s":-1}}]}`, "must be positive"},
+		{"zone too high", `{"title":"x","date":"2026-11-15","blocks":[{"type":"step","kind":"work","duration":{"time_s":60},"zone":8}]}`, "zone must be between 1 and 7"},
+		{"zone zero", `{"title":"x","date":"2026-11-15","blocks":[{"type":"step","kind":"work","duration":{"time_s":60},"zone":0}]}`, "zone must be between 1 and 7"},
+		{"repeat count 0", `{"title":"x","date":"2026-11-15","blocks":[{"type":"repeat","count":0,"blocks":[{"type":"step","kind":"work","duration":{"time_s":60}}]}]}`, "count must be at least 1"},
+		{"empty repeat", `{"title":"x","date":"2026-11-15","blocks":[{"type":"repeat","count":2,"blocks":[]}]}`, "blocks[0].blocks: at least one block"},
+		{"repeat with duration", `{"title":"x","date":"2026-11-15","blocks":[{"type":"repeat","count":2,"duration":{"time_s":60},"blocks":[{"type":"step","kind":"work","duration":{"time_s":60}}]}]}`, "a repeat cannot have"},
+		{"nested error path", `{"title":"x","date":"2026-11-15","blocks":[{"type":"repeat","count":2,"blocks":[{"type":"step","kind":"work","duration":{}}]}]}`, "blocks[0].blocks[0].duration: time_s or distance_m is required"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tr := parse(t, tt.json)
+			err := tr.Validate()
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("got %v, want error containing %q", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestValidateMaxDepth(t *testing.T) {
+	inner := `{"type":"step","kind":"work","duration":{"time_s":60}}`
+	for i := 0; i <= MaxDepth; i++ {
+		inner = `{"type":"repeat","count":2,"blocks":[` + inner + `]}`
+	}
+	tr := parse(t, `{"title":"x","date":"2026-11-15","blocks":[`+inner+`]}`)
+	if err := tr.Validate(); err == nil || !strings.Contains(err.Error(), "nested too deep") {
+		t.Fatalf("got %v, want nesting error", err)
+	}
+}
