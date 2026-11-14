@@ -94,3 +94,41 @@ func (q *Queries) ListTrainings(ctx context.Context) ([]Training, error) {
 	}
 	return items, nil
 }
+
+const listTrainingsBetween = `-- name: ListTrainingsBetween :many
+SELECT id, date, title, notes, blocks, created_at FROM trainings
+WHERE date >= $1 AND date < $2
+ORDER BY date, id
+`
+
+type ListTrainingsBetweenParams struct {
+	StartDate pgtype.Date `json:"start_date"`
+	EndDate   pgtype.Date `json:"end_date"`
+}
+
+func (q *Queries) ListTrainingsBetween(ctx context.Context, arg ListTrainingsBetweenParams) ([]Training, error) {
+	rows, err := q.db.Query(ctx, listTrainingsBetween, arg.StartDate, arg.EndDate)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Training
+	for rows.Next() {
+		var i Training
+		if err := rows.Scan(
+			&i.ID,
+			&i.Date,
+			&i.Title,
+			&i.Notes,
+			&i.Blocks,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

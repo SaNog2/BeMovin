@@ -1,0 +1,156 @@
+package web
+
+import (
+	"fmt"
+
+	"github.com/SaNog2/BeMovin/internal/training"
+)
+
+templ newTrainingPage(d draft, errs formErrors) {
+	@layout("New training") {
+		<div class="narrow form-page">
+			<a href="/" class="pill-btn back-link">
+				@chevronLeft()
+				Week
+			</a>
+			<h1 class="display">New training</h1>
+			<form method="post" action="/trainings/new" class="training-form" novalidate>
+				// Enter in a text field submits with the first submit button:
+				// make that the save button, not an editor button.
+				<button type="submit" class="visually-hidden" tabindex="-1" aria-hidden="true">Save</button>
+				if len(errs) > 0 {
+					<p class="form-alert" role="alert">Some fields need fixing. See the messages below.</p>
+				}
+				<div class="card form-card">
+					<div class="field-row">
+						<label class="field grow">
+							<span>Title</span>
+							<input type="text" name="title" value={ d.Title } placeholder="e.g. 6×400 m intervals" required/>
+							@fieldErrors(errs["title"])
+						</label>
+						<label class="field">
+							<span>Date</span>
+							<input type="date" name="date" value={ d.Date } required/>
+							@fieldErrors(errs["date"])
+						</label>
+					</div>
+					<label class="field">
+						<span>Notes <small class="muted">(optional)</small></span>
+						<textarea name="notes" rows="2">{ d.Notes }</textarea>
+					</label>
+				</div>
+				<h2 class="display-sm">Workout</h2>
+				@editor(d, errs)
+				<div class="form-actions">
+					<button type="submit" class="btn btn-primary">Save training</button>
+					<a href="/" class="btn">Cancel</a>
+				</div>
+			</form>
+		</div>
+	}
+}
+
+// editor is re-rendered on every add/remove/move. The buttons inherit
+// hx-target/hx-select/hx-swap from it and replace just this element.
+templ editor(d draft, errs formErrors) {
+	<div id="editor" hx-target="#editor" hx-select="#editor" hx-swap="outerHTML">
+		@fieldErrors(errs["blocks"])
+		@editBlockList(d.Blocks, blockPath{}, errs)
+	</div>
+}
+
+templ editBlockList(blocks []draftBlock, parent blockPath, errs formErrors) {
+	<ol class="edit-blocks">
+		for i, b := range blocks {
+			@editBlock(b, parent.child(i), i, len(blocks), errs)
+		}
+	</ol>
+	<div class="add-buttons">
+		@opButton("add-step:"+parent.String(), "+ Step", "")
+		if len(parent) < training.MaxDepth {
+			@opButton("add-repeat:"+parent.String(), "+ Repeat", "")
+		}
+	</div>
+}
+
+templ editBlock(b draftBlock, p blockPath, index, count int, errs formErrors) {
+	if b.Type == training.BlockRepeat {
+		<li class="edit-repeat">
+			<div class="edit-row">
+				<label class="inline-field">
+					<span>Repeat</span>
+					<input type="number" name={ fieldName(p, "count") } value={ b.Count } min="1" inputmode="numeric" class="count-input"/>
+					<span>×</span>
+				</label>
+				<input type="hidden" name={ fieldName(p, "type") } value="repeat"/>
+				@moveButtons(p, index, count)
+			</div>
+			@fieldErrors(errs[p.String()])
+			@editBlockList(b.Children, p, errs)
+		</li>
+	} else {
+		<li class={ "edit-step", zoneCls(draftZone(b.Zone)) }>
+			<input type="hidden" name={ fieldName(p, "type") } value="step"/>
+			<div class="edit-row">
+				<span class="zone-dot" aria-hidden="true"></span>
+				<select name={ fieldName(p, "kind") } aria-label="Step type">
+					for _, k := range stepKinds {
+						<option value={ string(k) } selected?={ b.Kind == string(k) }>{ kindLabel(k) }</option>
+					}
+				</select>
+				<span class="duration-input">
+					<input type="text" name={ fieldName(p, "value") } value={ b.Value } placeholder="–" inputmode="decimal" aria-label="Duration" size="5"/>
+					<select name={ fieldName(p, "unit") } aria-label="Unit">
+						for _, u := range units {
+							<option value={ u } selected?={ b.Unit == u }>{ u }</option>
+						}
+					</select>
+				</span>
+				<select name={ fieldName(p, "zone") } aria-label="Zone">
+					<option value="" selected?={ b.Zone == "" }>Zone –</option>
+					for z := training.MinZone; z <= training.MaxZone; z++ {
+						<option value={ fmt.Sprint(z) } selected?={ b.Zone == fmt.Sprint(z) }>{ fmt.Sprintf("Z%d", z) }</option>
+					}
+				</select>
+				@moveButtons(p, index, count)
+			</div>
+			<input type="text" name={ fieldName(p, "notes") } value={ b.Notes } placeholder="Notes (optional)" class="step-notes-input" aria-label="Step notes"/>
+			@fieldErrors(errs[p.String()])
+		</li>
+	}
+}
+
+templ moveButtons(p blockPath, index, count int) {
+	<span class="move-buttons">
+		if index > 0 {
+			@opButton("up:"+p.String(), "↑", "Move up")
+		}
+		if index < count-1 {
+			@opButton("down:"+p.String(), "↓", "Move down")
+		}
+		@opButton("remove:"+p.String(), "✕", "Remove")
+	</span>
+}
+
+// opButton submits the form with an editor operation. With htmx it only
+// swaps the editor; without JavaScript it reloads the page.
+templ opButton(op, label, title string) {
+	<button
+		type="submit"
+		name="op"
+		value={ op }
+		formaction="/trainings/new"
+		hx-post="/trainings/new"
+		class="btn btn-small"
+		if title != "" {
+			title={ title }
+			aria-label={ title }
+		}
+	>{ label }</button>
+}
+
+templ fieldErrors(msgs []string) {
+	for _, m := range msgs {
+		<p class="field-error">{ m }</p>
+	}
+}

@@ -2,6 +2,7 @@ package web
 
 import (
 	"fmt"
+	"github.com/a-h/templ"
 	"strconv"
 	"strings"
 	"time"
@@ -78,13 +79,42 @@ func kindLabel(k training.StepKind) string {
 	return string(k)
 }
 
-func zoneClass(z *int) string {
-	if z == nil {
-		return "zone-none"
-	}
-	return fmt.Sprintf("zone-%d", *z)
-}
-
 func trainingURL(id int64) string {
 	return fmt.Sprintf("/trainings/%d", id)
+}
+
+var (
+	stepKinds = []training.StepKind{training.KindWarmup, training.KindWork, training.KindRecovery, training.KindCooldown}
+	units     = []string{unitMin, unitSec, unitM, unitKm}
+)
+
+// draftZone is the zone typed in the editor, 0 when none or invalid.
+func draftZone(z string) int {
+	n, err := strconv.Atoi(z)
+	if err != nil || n < training.MinZone || n > training.MaxZone {
+		return 0
+	}
+	return n
+}
+
+func zoneCls(z int) string {
+	if z == 0 {
+		return "zone-none"
+	}
+	return fmt.Sprintf("zone-%d", z)
+}
+
+func grow(n int) templ.SafeCSS {
+	return templ.SafeCSS(fmt.Sprintf("flex-grow:%d", n))
+}
+
+func pageTitle(d weekPageData) string {
+	if d.Session != nil && d.Focus {
+		return d.Session.Title
+	}
+	return "Week of " + d.Week.Label
+}
+
+func chartLabel(s sessionView) string {
+	return fmt.Sprintf("Intensity over time, %s, %d sets", formatSummary(s.Summary), len(s.Sets))
 }

@@ -6,8 +6,8 @@
 package training
 
 import (
-	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 )
@@ -70,88 +70,136 @@ func (t *Training) ParsedDate() (time.Time, error) {
 	return time.Parse(DateLayout, t.Date)
 }
 
-// Validate checks the whole training and returns all problems found.
+// Problem is one validation failure. Block is the index path of the block
+// it belongs to (nil for training-level fields), e.g. [1 0] is the first
+// child of the second top-level block. Field is the field name ("title",
+// "duration", ...) or empty when the problem concerns the block as a whole.
+type Problem struct {
+	Block []int
+	Field string
+	Msg   string
+}
+
+// Location renders the problem's position, e.g. "blocks[1].blocks[0].duration".
+func (p Problem) Location() string {
+	if p.Block == nil {
+		return p.Field
+	}
+	var b strings.Builder
+	for i, idx := range p.Block {
+		if i > 0 {
+			b.WriteString(".")
+		}
+		fmt.Fprintf(&b, "blocks[%d]", idx)
+	}
+	if p.Field != "" {
+		b.WriteString(".")
+		b.WriteString(p.Field)
+	}
+	return b.String()
+}
+
+// ValidationError lists every problem found in a training.
+type ValidationError struct {
+	Problems []Problem
+}
+
+func (e *ValidationError) Error() string {
+	lines := make([]string, len(e.Problems))
+	for i, p := range e.Problems {
+		lines[i] = p.Location() + ": " + p.Msg
+	}
+	return strings.Join(lines, "\n")
+}
+
+// Validate checks the whole training. It returns a *ValidationError
+// listing all problems, or nil.
 func (t *Training) Validate() error {
-	var errs []error
+	var v validator
 	if strings.TrimSpace(t.Title) == "" {
-		errs = append(errs, errors.New("title is required"))
+		v.add(nil, "title", "required")
 	}
 	if _, err := t.ParsedDate(); err != nil {
-		errs = append(errs, fmt.Errorf("date must be YYYY-MM-DD, got %q", t.Date))
+		v.add(nil, "date", fmt.Sprintf("must be YYYY-MM-DD, got %q", t.Date))
 	}
-	errs = append(errs, validateBlocks(t.Blocks, "blocks", 0)...)
-	return errors.Join(errs...)
+	v.blocks(t.Blocks, nil)
+	if len(v.problems) == 0 {
+		return nil
+	}
+	return &ValidationError{Problems: v.problems}
 }
 
-func validateBlocks(blocks []Block, path string, depth int) []error {
+type validator struct {
+	problems []Problem
+}
+
+func (v *validator) add(path []int, field, msg string) {
+	v.problems = append(v.problems, Problem{Block: path, Field: field, Msg: msg})
+}
+
+// blocks validates the children of the block at parent (nil = top level).
+func (v *validator) blocks(blocks []Block, parent []int) {
 	if len(blocks) == 0 {
-		return []error{fmt.Errorf("%s: at least one block is required", path)}
+		v.add(parent, "blocks", "at least one block is required")
+		return
 	}
-	var errs []error
 	for i := range blocks {
-		errs = append(errs, blocks[i].validate(fmt.Sprintf("%s[%d]", path, i), depth)...)
+		v.block(&blocks[i], append(slices.Clone(parent), i))
 	}
-	return errs
 }
 
-func (b *Block) validate(path string, depth int) []error {
-	var errs []error
-	add := func(format string, args ...any) {
-		errs = append(errs, fmt.Errorf(path+": "+format, args...))
-	}
-
+func (v *validator) block(b *Block, path []int) {
 	switch b.Type {
 	case BlockStep:
 		switch b.Kind {
 		case KindWarmup, KindWork, KindRecovery, KindCooldown:
 		default:
-			add("kind must be one of warmup, work, recovery, cooldown, got %q", b.Kind)
+			v.add(path, "kind", fmt.Sprintf("must be one of warmup, work, recovery, cooldown, got %q", b.Kind))
 		}
 		if b.Duration == nil {
-			add("duration is required")
-		} else {
-			errs = append(errs, b.Duration.validate(path+".duration")...)
+			v.add(path, "duration", "required")
+		} else if msg := b.Duration.problem(); msg != "" {
+			v.add(path, "duration", msg)
 		}
 		if b.Zone != nil && (*b.Zone < MinZone || *b.Zone > MaxZone) {
-			add("zone must be between %d and %d, got %d", MinZone, MaxZone, *b.Zone)
+			v.add(path, "zone", fmt.Sprintf("must be between %d and %d, got %d", MinZone, MaxZone, *b.Zone))
 		}
 		if b.Count != 0 || len(b.Blocks) > 0 {
-			add("a step cannot have count or blocks")
+			v.add(path, "", "a step cannot have count or blocks")
 		}
 
 	case BlockRepeat:
-		if depth >= MaxDepth {
-			add("repeats are nested too deep (max %d)", MaxDepth)
-			return errs
+		if len(path) > MaxDepth {
+			v.add(path, "", fmt.Sprintf("repeats are nested too deep (max %d)", MaxDepth))
+			return
 		}
 		if b.Count < 1 {
-			add("count must be at least 1")
+			v.add(path, "count", "must be at least 1")
 		}
 		if b.Kind != "" || b.Duration != nil || b.Zone != nil {
-			add("a repeat cannot have kind, duration or zone")
+			v.add(path, "", "a repeat cannot have kind, duration or zone")
 		}
-		errs = append(errs, validateBlocks(b.Blocks, path+".blocks", depth+1)...)
+		v.blocks(b.Blocks, path)
 
 	default:
-		add("type must be %q or %q, got %q", BlockStep, BlockRepeat, b.Type)
+		v.add(path, "type", fmt.Sprintf("must be %q or %q, got %q", BlockStep, BlockRepeat, b.Type))
 	}
-	return errs
 }
 
-func (d *Duration) validate(path string) []error {
+func (d *Duration) problem() string {
 	switch {
 	case d.TimeS != nil && d.DistanceM != nil:
-		return []error{fmt.Errorf("%s: set either time_s or distance_m, not both", path)}
+		return "set either time_s or distance_m, not both"
 	case d.TimeS != nil:
 		if *d.TimeS <= 0 {
-			return []error{fmt.Errorf("%s: time_s must be positive", path)}
+			return "time_s must be positive"
 		}
 	case d.DistanceM != nil:
 		if *d.DistanceM <= 0 {
-			return []error{fmt.Errorf("%s: distance_m must be positive", path)}
+			return "distance_m must be positive"
 		}
 	default:
-		return []error{fmt.Errorf("%s: time_s or distance_m is required", path)}
+		return "time_s or distance_m is required"
 	}
-	return nil
+	return ""
 }

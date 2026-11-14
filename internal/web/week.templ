@@ -1,0 +1,162 @@
+package web
+
+import "fmt"
+
+templ weekPage(d weekPageData) {
+	@layout(pageTitle(d)) {
+		<div class={ "week-page", templ.KV("focus", d.Focus) }>
+			<aside class="week-list" aria-label="Week">
+				<div class="week-head">
+					<h1 class="display">{ d.Week.Label }</h1>
+					<nav class="week-nav" aria-label="Change week">
+						<a href={ templ.URL(d.Week.PrevURL) } class="icon-btn" aria-label="Previous week">
+							@chevronLeft()
+						</a>
+						<a href={ templ.URL(d.Week.NextURL) } class="icon-btn" aria-label="Next week">
+							@chevronRight()
+						</a>
+					</nav>
+				</div>
+				<ol class="days">
+					for _, day := range d.Week.Days {
+						if len(day.Rows) == 0 {
+							<li class={ "day-rest", templ.KV("today", day.IsToday) }>
+								@dayLabel(day)
+								<span>Rest</span>
+								if d.IsAdmin {
+									<a href={ templ.URL("/trainings/new?date=" + day.ISO) } class="add-link" aria-label={ "Add a training on " + day.Dow + " " + day.Date }>
+										@plusIcon()
+									</a>
+								}
+							</li>
+						}
+						for _, row := range day.Rows {
+							<li>
+								<a
+									href={ templ.URL(row.URL) }
+									class={ "day-row", templ.KV("selected", row.Selected), templ.KV("today", day.IsToday) }
+									if row.Selected {
+										aria-current="page"
+									}
+								>
+									@dayLabel(day)
+									<span class="day-main">
+										<span class="day-title">{ row.Title }</span>
+										<span class="day-dur">{ row.DurLabel }</span>
+									</span>
+									<span class="mini-strip" aria-hidden="true">
+										<span style={ templ.SafeCSS(fmt.Sprintf("width:%.1f%%", row.StripW)) }>
+											for _, b := range row.Bars {
+												<span class={ "bar", zoneCls(b.Zone) } style={ grow(b.Grow) }></span>
+											}
+										</span>
+									</span>
+									<span class="row-chevron">
+										@chevronRight()
+									</span>
+								</a>
+							</li>
+						}
+					}
+				</ol>
+				if d.IsAdmin {
+					<a href="/trainings/new" class="pill-btn new-btn">
+						@plusIcon()
+						New training
+					</a>
+				}
+			</aside>
+			<section class="session-pane">
+				if d.Session != nil {
+					@session(*d.Session, d.Week.URL)
+				} else {
+					<div class="empty-card">
+						<p class="display-sm">No training this week</p>
+						<p class="muted">Rest days all round.</p>
+					</div>
+				}
+			</section>
+		</div>
+	}
+}
+
+templ dayLabel(day dayView) {
+	<span class="day-label">
+		<span class="dow">{ day.Dow }</span>
+		<span class="date">{ day.Date }</span>
+	</span>
+}
+
+templ session(s sessionView, weekURL string) {
+	<article class="session" aria-labelledby="session-title">
+		<a href={ templ.URL(weekURL) } class="pill-btn back-btn">
+			@chevronLeft()
+			Week
+		</a>
+		<header class="session-head">
+			<h1 id="session-title" class="display">{ s.Title }</h1>
+			if s.Notes != "" {
+				<p class="session-notes">{ s.Notes }</p>
+			}
+		</header>
+		<div class="card chart-card">
+			<div class="chart-head">
+				<h2 class="display-sm">Intensity</h2>
+				<ul class="legend">
+					for _, z := range s.Zones {
+						<li><span class={ "swatch", zoneCls(z) }></span>{ fmt.Sprintf("Z%d", z) }</li>
+					}
+				</ul>
+			</div>
+			<div class="chart" role="img" aria-label={ chartLabel(s) }>
+				<div class="chart-bars">
+					for _, b := range s.Bars {
+						<span class={ "bar", zoneCls(b.Zone), templ.KV("is-sel", b.Set == s.Selected) } data-set={ fmt.Sprint(b.Set) } style={ grow(b.Grow) }></span>
+					}
+				</div>
+			</div>
+			<div class="brackets">
+				for _, set := range s.Sets {
+					<button type="button" class={ "bracket", templ.KV("is-sel", set.Num == s.Selected) } data-set={ fmt.Sprint(set.Num) } data-pick-set={ fmt.Sprint(set.Num) } style={ grow(set.Grow) } aria-label={ fmt.Sprintf("Show set %d", set.Num) }>
+						<span class="bracket-line"></span>
+						<span class="bracket-num">{ fmt.Sprint(set.Num) }</span>
+					</button>
+				}
+			</div>
+			<div class="ticks" aria-hidden="true">
+				for _, t := range s.Ticks {
+					<span class={ "tick", "tick-" + t.Align } style={ templ.SafeCSS(fmt.Sprintf("left:%.2f%%", t.Left)) }>{ t.Label }</span>
+				}
+			</div>
+			if s.Estimated {
+				<p class="chart-note">~ Distance steps are drawn with an estimated pace per zone.</p>
+			}
+		</div>
+		<section class="sets-section" aria-labelledby="sets-title">
+			<h2 id="sets-title" class="display-sm">Sets</h2>
+			<div class="sets">
+				for _, set := range s.Sets {
+					<button type="button" class={ "set-card", templ.KV("is-sel", set.Num == s.Selected) } data-set={ fmt.Sprint(set.Num) } data-pick-set={ fmt.Sprint(set.Num) }>
+						<span class="set-top">
+							<span class="set-num">{ fmt.Sprint(set.Num) }</span>
+							<span class="set-titles">
+								<span class="set-name">{ set.Name }</span>
+								<span class="set-structure">{ set.Structure }</span>
+							</span>
+							<span class="set-dur">{ set.DurLabel }</span>
+						</span>
+						<span class="set-details">
+							<span class="set-zone">
+								<span class={ "swatch", zoneCls(set.Zone) }></span>
+								<strong>{ zoneName(set.Zone) }</strong>
+							</span>
+							for _, e := range set.Extras {
+								<span><strong>{ e.Label }</strong> { e.Text }</span>
+							}
+						</span>
+					</button>
+				}
+			</div>
+		</section>
+	</article>
+}

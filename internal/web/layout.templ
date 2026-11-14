@@ -7,14 +7,14 @@ templ layout(title string) {
 			<meta charset="utf-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1"/>
 			<title>{ title } · BeMovin</title>
+			<link rel="preload" href="/static/fonts/inter.woff2" as="font" type="font/woff2" crossorigin/>
+			<link rel="preload" href="/static/fonts/space-grotesk.woff2" as="font" type="font/woff2" crossorigin/>
 			<link rel="stylesheet" href="/static/style.css"/>
 			<script src="/static/htmx.min.js" defer></script>
+			<script src="/static/app.js" defer></script>
 		</head>
 		<body hx-boost="true">
-			<header class="site-header">
-				<a href="/" class="brand">BeMovin</a>
-			</header>
-			<main>
+			<main class="page">
 				{ children... }
 			</main>
 		</body>
@@ -23,8 +23,22 @@ templ layout(title string) {
 
 templ messagePage(title, message string) {
 	@layout(title) {
-		<h1>{ title }</h1>
-		<p class="muted">{ message }</p>
-		<p><a href="/">Back to trainings</a></p>
+		<div class="narrow">
+			<h1 class="display">{ title }</h1>
+			<p class="muted">{ message }</p>
+			<p><a href="/" class="pill-btn">Back to this week</a></p>
+		</div>
 	}
+}
+
+templ chevronLeft() {
+	<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg>
+}
+
+templ chevronRight() {
+	<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"></path></svg>
+}
+
+templ plusIcon() {
+	<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
 }

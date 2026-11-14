@@ -4,18 +4,13 @@ package web
 import (
 	"embed"
 	"encoding/json"
-	"errors"
 	"io/fs"
 	"log"
 	"net/http"
-	"slices"
-	"strconv"
 	"time"
 
 	"github.com/a-h/templ"
-	"github.com/jackc/pgx/v5"
 
-	"github.com/SaNog2/BeMovin/internal/auth"
 	"github.com/SaNog2/BeMovin/internal/store"
 	"github.com/SaNog2/BeMovin/internal/training"
 )
@@ -39,8 +34,11 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	}
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServerFS(static)))
 
-	mux.HandleFunc("GET /{$}", h.listPage)
-	mux.HandleFunc("GET /trainings/{id}", h.detailPage)
+	mux.HandleFunc("GET /{$}", h.homePage)
+	mux.HandleFunc("GET /weeks/{date}", h.weekPage)
+	mux.HandleFunc("GET /trainings/new", h.newTrainingPage)
+	mux.HandleFunc("POST /trainings/new", h.createTraining)
+	mux.HandleFunc("GET /trainings/{id}", h.trainingPage)
 	mux.HandleFunc("/", h.notFound)
 }
 
@@ -67,57 +65,6 @@ func toView(t store.Training) (trainingView, error) {
 		Blocks:  blocks,
 		Summary: training.Summarize(blocks),
 	}, nil
-}
-
-func (h *Handler) listPage(w http.ResponseWriter, r *http.Request) {
-	rows, err := h.q.ListTrainings(r.Context())
-	if err != nil {
-		h.serverError(w, r, "list trainings", err)
-		return
-	}
-
-	// Rows come newest first. Upcoming trainings read better soonest
-	// first, past ones most recent first.
-	today := time.Now().UTC().Truncate(24 * time.Hour)
-	var upcoming, past []trainingView
-	for _, row := range rows {
-		v, err := toView(row)
-		if err != nil {
-			h.serverError(w, r, "decode training", err)
-			return
-		}
-		if v.Date.Before(today) {
-			past = append(past, v)
-		} else {
-			upcoming = append(upcoming, v)
-		}
-	}
-	slices.Reverse(upcoming)
-
-	render(w, r, http.StatusOK, listPage(upcoming, past, auth.IsAdmin(r.Context())))
-}
-
-func (h *Handler) detailPage(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil {
-		h.notFound(w, r)
-		return
-	}
-	row, err := h.q.GetTraining(r.Context(), id)
-	if errors.Is(err, pgx.ErrNoRows) {
-		h.notFound(w, r)
-		return
-	}
-	if err != nil {
-		h.serverError(w, r, "get training", err)
-		return
-	}
-	v, err := toView(row)
-	if err != nil {
-		h.serverError(w, r, "decode training", err)
-		return
-	}
-	render(w, r, http.StatusOK, detailPage(v))
 }
 
 func (h *Handler) notFound(w http.ResponseWriter, r *http.Request) {

@@ -4,6 +4,8 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"time"
+	_ "time/tzdata" // zone data is embedded: the slim image has none
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
@@ -17,7 +19,15 @@ import (
 	"github.com/SaNog2/BeMovin/internal/web"
 )
 
+const timeZone = "Europe/Berlin"
+
 func main() {
+	loc, err := time.LoadLocation(timeZone)
+	if err != nil {
+		log.Fatal("Error loading time zone: ", err)
+	}
+	time.Local = loc
+
 	cfg := config.Load()
 	ctx := context.Background()
 
@@ -36,8 +46,8 @@ func main() {
 
 	q := store.New(pool)
 	mux := http.NewServeMux()
-	api.New(q).Register(mux) // JSON under /api/...
-	web.New(q).Register(mux) // HTML pages and /static/...
+	api.New(q).Register(mux)
+	web.New(q).Register(mux)
 
 	s := &http.Server{
 		Addr:    ":" + cfg.Port,
