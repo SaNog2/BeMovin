@@ -15,6 +15,7 @@ import (
 	"github.com/SaNog2/BeMovin/internal/api"
 	"github.com/SaNog2/BeMovin/internal/auth"
 	"github.com/SaNog2/BeMovin/internal/config"
+	"github.com/SaNog2/BeMovin/internal/middleware"
 	"github.com/SaNog2/BeMovin/internal/store"
 	"github.com/SaNog2/BeMovin/internal/web"
 )
@@ -49,9 +50,18 @@ func main() {
 	api.New(q).Register(mux)
 	web.New(q).Register(mux)
 
+	var h http.Handler = auth.Require(cfg, mux, web.ViewerCanWrite)
+	h = middleware.CrossOrigin(h)
+	h = middleware.SecurityHeaders(h)
+
 	s := &http.Server{
 		Addr:    ":" + cfg.Port,
-		Handler: auth.Require(cfg, mux, web.ViewerCanWrite),
+		Handler: h,
+		// Timeouts stop slow or idle clients from holding connections open.
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       2 * time.Minute,
 	}
 	log.Println("Listening on :" + cfg.Port)
 	log.Fatal(s.ListenAndServe())

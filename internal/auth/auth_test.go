@@ -18,9 +18,9 @@ func TestRequireAuth(t *testing.T) {
 
 	tests := []struct {
 		name, method, path, user, pass string
-		noAuth                   bool
-		want                     int
-		wantRole                 Role
+		noAuth                         bool
+		want                           int
+		wantRole                       Role
 	}{
 		{"no credentials", http.MethodGet, "/", "", "", true, http.StatusUnauthorized, RoleNone},
 		{"wrong password", http.MethodGet, "/", "admin", "nope", false, http.StatusUnauthorized, RoleNone},

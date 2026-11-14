@@ -39,11 +39,10 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /trainings/new", h.newTrainingPage)
 	mux.HandleFunc("POST /trainings/new", h.createTraining)
 	mux.HandleFunc("GET /trainings/{id}", h.trainingPage)
-	// The viewer can post to these (see ViewerCanWrite): reject cross-site posts.
-	csrf := http.NewCrossOriginProtection()
-	mux.Handle("POST /trainings/{id}/completion", csrf.Handler(http.HandlerFunc(h.saveCompletion)))
-	mux.Handle("POST /trainings/{id}/comments", csrf.Handler(http.HandlerFunc(h.createComment)))
-	mux.Handle("POST /trainings/{id}/comments/{cid}/delete", csrf.Handler(http.HandlerFunc(h.deleteComment)))
+	// The viewer can post to these too (see ViewerCanWrite).
+	mux.HandleFunc("POST /trainings/{id}/completion", h.saveCompletion)
+	mux.HandleFunc("POST /trainings/{id}/comments", h.createComment)
+	mux.HandleFunc("POST /trainings/{id}/comments/{cid}/delete", h.deleteComment)
 	mux.HandleFunc("/", h.notFound)
 }
 
