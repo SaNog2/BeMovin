@@ -47,6 +47,15 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # latest = tip of main (what Dokploy deploys). Releases also get
+          # their version tag, every build gets a sha-xxxxxxx tag for rollbacks.
+          flavor: |
+            latest=false
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
+            type=ref,event=tag
+            type=sha
 
       - name: Build and push Docker image
         id: push
@@ -58,4 +67,4 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
 
       - name: Trigger Dokploy deploy
-        run: curl -fsS -X POST "${{ secrets.DOKPLOY_WEBHOOK }}"
+        run: curl -fsS --retry 5 --retry-all-errors --retry-delay 10 --connect-timeout 15 --max-time 60 -X POST "${{ secrets.DOKPLOY_WEBHOOK }}"

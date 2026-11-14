@@ -1,6 +1,8 @@
 package config
 
 import (
+	"errors"
+	"io/fs"
 	"log"
 	"os"
 
@@ -24,7 +26,9 @@ type Config struct {
 }
 
 func Load() *Config {
-	if err := godotenv.Load(); err != nil {
+	// .env is for local development. In the container, the variables come
+	// from the environment (Dokploy) and there is no .env file.
+	if err := godotenv.Load(); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		log.Fatal("Error loading .env file: ", err)
 	}
 
