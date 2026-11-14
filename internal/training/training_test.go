@@ -78,3 +78,13 @@ func TestValidateMaxDepth(t *testing.T) {
 		t.Fatalf("got %v, want nesting error", err)
 	}
 }
+
+func TestSummarize(t *testing.T) {
+	tr := parse(t, valid)
+	// warmup 900 + 3*(2*(400m + 90s) + 180s) + cooldown 600
+	got := Summarize(tr.Blocks)
+	want := Summary{TimeS: 900 + 3*(2*90+180) + 600, DistanceM: 3 * 2 * 400}
+	if got != want {
+		t.Fatalf("got %+v, want %+v", got, want)
+	}
+}

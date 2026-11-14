@@ -1,0 +1,30 @@
+package web
+
+templ layout(title string) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>{ title } · BeMovin</title>
+			<link rel="stylesheet" href="/static/style.css"/>
+			<script src="/static/htmx.min.js" defer></script>
+		</head>
+		<body hx-boost="true">
+			<header class="site-header">
+				<a href="/" class="brand">BeMovin</a>
+			</header>
+			<main>
+				{ children... }
+			</main>
+		</body>
+	</html>
+}
+
+templ messagePage(title, message string) {
+	@layout(title) {
+		<h1>{ title }</h1>
+		<p class="muted">{ message }</p>
+		<p><a href="/">Back to trainings</a></p>
+	}
+}

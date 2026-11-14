@@ -1,4 +1,5 @@
-package main
+// Package api serves the JSON API under /api.
+package api
 
 import (
 	"encoding/json"
@@ -17,8 +18,19 @@ import (
 
 const maxBodyBytes = 1 << 20 // 1 MiB
 
-type server struct {
+type Handler struct {
 	q *store.Queries
+}
+
+func New(q *store.Queries) *Handler {
+	return &Handler{q: q}
+}
+
+// Register adds the API routes to mux.
+func (h *Handler) Register(mux *http.ServeMux) {
+	mux.HandleFunc("POST /api/trainings", h.createTraining)
+	mux.HandleFunc("GET /api/trainings", h.listTrainings)
+	mux.HandleFunc("GET /api/trainings/{id}", h.getTraining)
 }
 
 // trainingResponse is the API shape of a stored training.
@@ -42,7 +54,7 @@ func toResponse(t store.Training) trainingResponse {
 	}
 }
 
-func (s *server) createTraining(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) createTraining(w http.ResponseWriter, r *http.Request) {
 	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodyBytes))
 	dec.DisallowUnknownFields() // catch typos like "zones" or "time"
 
@@ -63,7 +75,7 @@ func (s *server) createTraining(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	t, err := s.q.CreateTraining(r.Context(), store.CreateTrainingParams{
+	t, err := h.q.CreateTraining(r.Context(), store.CreateTrainingParams{
 		Date:   pgtype.Date{Time: date, Valid: true},
 		Title:  in.Title,
 		Notes:  in.Notes,
@@ -77,8 +89,8 @@ func (s *server) createTraining(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, toResponse(t))
 }
 
-func (s *server) listTrainings(w http.ResponseWriter, r *http.Request) {
-	rows, err := s.q.ListTrainings(r.Context())
+func (h *Handler) listTrainings(w http.ResponseWriter, r *http.Request) {
+	rows, err := h.q.ListTrainings(r.Context())
 	if err != nil {
 		log.Println("list trainings:", err)
 		writeError(w, http.StatusInternalServerError, "could not load trainings")
@@ -91,13 +103,13 @@ func (s *server) listTrainings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-func (s *server) getTraining(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) getTraining(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid id")
 		return
 	}
-	t, err := s.q.GetTraining(r.Context(), id)
+	t, err := h.q.GetTraining(r.Context(), id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		writeError(w, http.StatusNotFound, "training not found")
 		return

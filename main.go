@@ -10,8 +10,11 @@ import (
 	"github.com/pressly/goose/v3"
 
 	"github.com/SaNog2/BeMovin/db"
+	"github.com/SaNog2/BeMovin/internal/api"
+	"github.com/SaNog2/BeMovin/internal/auth"
 	"github.com/SaNog2/BeMovin/internal/config"
 	"github.com/SaNog2/BeMovin/internal/store"
+	"github.com/SaNog2/BeMovin/internal/web"
 )
 
 func main() {
@@ -31,17 +34,14 @@ func main() {
 		log.Fatal("Error running migrations: ", err)
 	}
 
-	srv := &server{q: store.New(pool)}
-
+	q := store.New(pool)
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", handlePage)
-	mux.HandleFunc("POST /trainings", srv.createTraining)
-	mux.HandleFunc("GET /trainings", srv.listTrainings)
-	mux.HandleFunc("GET /trainings/{id}", srv.getTraining)
+	api.New(q).Register(mux) // JSON under /api/...
+	web.New(q).Register(mux) // HTML pages and /static/...
 
 	s := &http.Server{
 		Addr:    ":" + cfg.Port,
-		Handler: requireAuth(cfg, mux),
+		Handler: auth.Require(cfg, mux),
 	}
 	log.Println("Listening on :" + cfg.Port)
 	log.Fatal(s.ListenAndServe())
@@ -56,17 +56,4 @@ func migrate(pool *pgxpool.Pool) error {
 		return err
 	}
 	return goose.Up(sqlDB, "migrations")
-}
-
-func handlePage(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html")
-	w.WriteHeader(200)
-	const page = `<html>
-<head></head>
-<body>
-	<p> Hello from Docker! I'm a Go server. </p>
-</body>
-</html>
-`
-	w.Write([]byte(page))
 }

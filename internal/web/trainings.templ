@@ -1,0 +1,84 @@
+package web
+
+import (
+	"fmt"
+
+	"github.com/SaNog2/BeMovin/internal/training"
+)
+
+templ listPage(upcoming, past []trainingView, isAdmin bool) {
+	@layout("Trainings") {
+		<h1>Trainings</h1>
+		if len(upcoming) == 0 && len(past) == 0 {
+			<p class="muted">No trainings yet.</p>
+			if isAdmin {
+				<p class="muted">Create one with <code>POST /api/trainings</code>.</p>
+			}
+		}
+		if len(upcoming) > 0 {
+			<section>
+				<h2>Upcoming</h2>
+				@trainingCards(upcoming)
+			</section>
+		}
+		if len(past) > 0 {
+			<section>
+				<h2>Past</h2>
+				@trainingCards(past)
+			</section>
+		}
+	}
+}
+
+templ trainingCards(ts []trainingView) {
+	<ul class="cards">
+		for _, t := range ts {
+			<li>
+				<a class="card" href={ templ.URL(trainingURL(t.ID)) }>
+					<span class="card-date">{ formatDate(t.Date) }</span>
+					<span class="card-title">{ t.Title }</span>
+					<span class="card-summary">{ formatSummary(t.Summary) }</span>
+				</a>
+			</li>
+		}
+	</ul>
+}
+
+templ detailPage(t trainingView) {
+	@layout(t.Title) {
+		<p><a href="/">← All trainings</a></p>
+		<p class="muted">{ formatDate(t.Date) }</p>
+		<h1>{ t.Title }</h1>
+		if s := formatSummary(t.Summary); s != "" {
+			<p class="summary">Total: <strong>{ s }</strong></p>
+		}
+		if t.Notes != "" {
+			<p class="notes">{ t.Notes }</p>
+		}
+		@blockList(t.Blocks)
+	}
+}
+
+templ blockList(blocks []training.Block) {
+	<ol class="blocks">
+		for _, b := range blocks {
+			if b.Type == training.BlockRepeat {
+				<li class="repeat">
+					<div class="repeat-head">{ fmt.Sprintf("%d×", b.Count) }</div>
+					@blockList(b.Blocks)
+				</li>
+			} else {
+				<li class={ "step", zoneClass(b.Zone) }>
+					<span class="step-kind">{ kindLabel(b.Kind) }</span>
+					<span class="step-duration">{ formatDuration(b.Duration) }</span>
+					if b.Zone != nil {
+						<span class="step-zone">{ fmt.Sprintf("Z%d", *b.Zone) }</span>
+					}
+					if b.Notes != "" {
+						<span class="step-notes">{ b.Notes }</span>
+					}
+				</li>
+			}
+		}
+	</ol>
+}
