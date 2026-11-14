@@ -34,7 +34,7 @@ templ weekPage(d weekPageData) {
 							<li>
 								<a
 									href={ templ.URL(row.URL) }
-									class={ "day-row", templ.KV("selected", row.Selected), templ.KV("today", day.IsToday) }
+									class={ "day-row", templ.KV("selected", row.Selected), templ.KV("today", day.IsToday), templ.KV("done", row.Done) }
 									if row.Selected {
 										aria-current="page"
 									}
@@ -42,7 +42,16 @@ templ weekPage(d weekPageData) {
 									@dayLabel(day)
 									<span class="day-main">
 										<span class="day-title">{ row.Title }</span>
-										<span class="day-dur">{ row.DurLabel }</span>
+										<span class="day-dur">
+											if row.Done {
+												<span class="done-tag">
+													@checkIcon()
+													Done
+												</span>
+												<span aria-hidden="true">·</span>
+											}
+											{ row.DurLabel }
+										</span>
 									</span>
 									<span class="mini-strip" aria-hidden="true">
 										<span style={ templ.SafeCSS(fmt.Sprintf("width:%.1f%%", row.StripW)) }>
@@ -94,11 +103,40 @@ templ session(s sessionView, weekURL string) {
 			Week
 		</a>
 		<header class="session-head">
-			<h1 id="session-title" class="display">{ s.Title }</h1>
+			<div class="session-title-row">
+				<h1 id="session-title" class="display">{ s.Title }</h1>
+				if !s.Done {
+					<button type="button" class="pill-btn primary" data-open-dialog="done-dialog">
+						@checkIcon()
+						Mark as done
+					</button>
+				}
+			</div>
 			if s.Notes != "" {
 				<p class="session-notes">{ s.Notes }</p>
 			}
 		</header>
+		if s.Done {
+			<section class="card done-card" aria-label="Your log">
+				<div class="done-head">
+					<span class="done-badge">
+						@checkIcon()
+						Done
+					</span>
+					if s.Feeling != 0 {
+						<span class="feeling-tag">
+							Felt { feelingLabel(s.Feeling) }
+							<span class="muted">{ fmt.Sprintf("%d/5", s.Feeling) }</span>
+						</span>
+					}
+					<button type="button" class="btn btn-small done-edit" data-open-dialog="done-dialog">Edit</button>
+				</div>
+				if s.CompletionNote != "" {
+					<p class="done-note">{ s.CompletionNote }</p>
+				}
+			</section>
+		}
+		@doneDialog(s)
 		<div class="card chart-card">
 			<div class="chart-head">
 				<h2 class="display-sm">Intensity</h2>
@@ -158,5 +196,95 @@ templ session(s sessionView, weekURL string) {
 				}
 			</div>
 		</section>
+		@comments(s)
 	</article>
+}
+
+templ comments(s sessionView) {
+	<section id="comments" class="comments-section" aria-labelledby="comments-title">
+		<h2 id="comments-title" class="display-sm">
+			Comments
+			if len(s.Comments) > 0 {
+				<span class="count">{ fmt.Sprint(len(s.Comments)) }</span>
+			}
+		</h2>
+		<div class="card comments-card">
+			if len(s.Comments) > 0 {
+				<ol class="comment-list">
+					for _, c := range s.Comments {
+						<li class={ "comment", templ.KV("mine", c.Mine) }>
+							<span class="avatar" aria-hidden="true">{ commentInitial(c.Author) }</span>
+							<div class="comment-main">
+								<div class="comment-meta">
+									<strong>{ c.Author }</strong>
+									<span class="muted">{ c.When }</span>
+									if c.CanDelete {
+										<form method="post" action={ templ.SafeURL(deleteCommentURL(s.ID, c.ID)) } class="comment-delete" hx-confirm="Delete this comment?">
+											<button type="submit" class="link-btn">Delete</button>
+										</form>
+									}
+								</div>
+								<p class="comment-body">{ c.Body }</p>
+							</div>
+						</li>
+					}
+				</ol>
+			} else {
+				<p class="muted comments-empty">No comments yet.</p>
+			}
+			<form method="post" action={ templ.SafeURL(commentsURL(s.ID)) } class="comment-form">
+				<label for="comment-body" class="visually-hidden">Write a comment</label>
+				<textarea id="comment-body" name="body" rows="2" required maxlength={ fmt.Sprint(maxCommentLen) } placeholder="Write a comment…"></textarea>
+				<button type="submit" class="btn btn-primary">Post</button>
+			</form>
+		</div>
+	</section>
+}
+
+// doneDialog is the "mark as done" modal, opened by the
+// data-open-dialog buttons (see app.js).
+templ doneDialog(s sessionView) {
+	<dialog id="done-dialog" class="modal" aria-labelledby="done-dialog-title" autofocus>
+		<form method="post" action={ templ.SafeURL(completionURL(s.ID)) } class="modal-form">
+			<div class="modal-head">
+				<h2 id="done-dialog-title" class="display-sm">
+					if s.Done {
+						Edit your log
+					} else {
+						Mark as done
+					}
+				</h2>
+				<p class="muted">{ s.Title }</p>
+			</div>
+			<fieldset class="feeling-field">
+				<legend>How did it feel? <small class="muted">(optional)</small></legend>
+				<div class="feeling-options">
+					for f := 1; f < len(feelings); f++ {
+						<label class="feeling-option">
+							<input type="radio" name="feeling" value={ fmt.Sprint(f) } checked?={ s.Feeling == f }/>
+							<span class="feeling-num">{ fmt.Sprint(f) }</span>
+							<span class="feeling-label">{ feelingLabel(f) }</span>
+						</label>
+					}
+				</div>
+			</fieldset>
+			<label class="field">
+				<span>Note <small class="muted">(optional)</small></span>
+				<textarea name="note" rows="3" maxlength={ fmt.Sprint(maxCompletionNote) } placeholder="Legs felt heavy, nailed the last rep…">{ s.CompletionNote }</textarea>
+			</label>
+			<div class="form-actions">
+				<button type="submit" class="btn btn-primary">
+					if s.Done {
+						Save
+					} else {
+						Mark as done
+					}
+				</button>
+				<button type="button" class="btn" data-close-dialog>Cancel</button>
+				if s.Done {
+					<button type="submit" name="action" value="undo" class="btn btn-ghost-danger">Mark as not done</button>
+				}
+			</div>
+		</form>
+	</dialog>
 }

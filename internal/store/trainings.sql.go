@@ -12,10 +12,32 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const completeTraining = `-- name: CompleteTraining :execrows
+UPDATE trainings
+SET completed_at    = COALESCE(completed_at, now()),
+    feeling         = $1,
+    completion_note = $2
+WHERE id = $3
+`
+
+type CompleteTrainingParams struct {
+	Feeling        pgtype.Int2 `json:"feeling"`
+	CompletionNote string      `json:"completion_note"`
+	ID             int64       `json:"id"`
+}
+
+func (q *Queries) CompleteTraining(ctx context.Context, arg CompleteTrainingParams) (int64, error) {
+	result, err := q.db.Exec(ctx, completeTraining, arg.Feeling, arg.CompletionNote, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const createTraining = `-- name: CreateTraining :one
 INSERT INTO trainings (date, title, notes, blocks)
 VALUES ($1, $2, $3, $4)
-RETURNING id, date, title, notes, blocks, created_at
+RETURNING id, date, title, notes, blocks, created_at, completed_at, feeling, completion_note
 `
 
 type CreateTrainingParams struct {
@@ -40,12 +62,15 @@ func (q *Queries) CreateTraining(ctx context.Context, arg CreateTrainingParams) 
 		&i.Notes,
 		&i.Blocks,
 		&i.CreatedAt,
+		&i.CompletedAt,
+		&i.Feeling,
+		&i.CompletionNote,
 	)
 	return i, err
 }
 
 const getTraining = `-- name: GetTraining :one
-SELECT id, date, title, notes, blocks, created_at FROM trainings
+SELECT id, date, title, notes, blocks, created_at, completed_at, feeling, completion_note FROM trainings
 WHERE id = $1
 `
 
@@ -59,12 +84,15 @@ func (q *Queries) GetTraining(ctx context.Context, id int64) (Training, error) {
 		&i.Notes,
 		&i.Blocks,
 		&i.CreatedAt,
+		&i.CompletedAt,
+		&i.Feeling,
+		&i.CompletionNote,
 	)
 	return i, err
 }
 
 const listTrainings = `-- name: ListTrainings :many
-SELECT id, date, title, notes, blocks, created_at FROM trainings
+SELECT id, date, title, notes, blocks, created_at, completed_at, feeling, completion_note FROM trainings
 ORDER BY date DESC, id DESC
 `
 
@@ -84,6 +112,9 @@ func (q *Queries) ListTrainings(ctx context.Context) ([]Training, error) {
 			&i.Notes,
 			&i.Blocks,
 			&i.CreatedAt,
+			&i.CompletedAt,
+			&i.Feeling,
+			&i.CompletionNote,
 		); err != nil {
 			return nil, err
 		}
@@ -96,7 +127,7 @@ func (q *Queries) ListTrainings(ctx context.Context) ([]Training, error) {
 }
 
 const listTrainingsBetween = `-- name: ListTrainingsBetween :many
-SELECT id, date, title, notes, blocks, created_at FROM trainings
+SELECT id, date, title, notes, blocks, created_at, completed_at, feeling, completion_note FROM trainings
 WHERE date >= $1 AND date < $2
 ORDER BY date, id
 `
@@ -122,6 +153,9 @@ func (q *Queries) ListTrainingsBetween(ctx context.Context, arg ListTrainingsBet
 			&i.Notes,
 			&i.Blocks,
 			&i.CreatedAt,
+			&i.CompletedAt,
+			&i.Feeling,
+			&i.CompletionNote,
 		); err != nil {
 			return nil, err
 		}
@@ -131,4 +165,18 @@ func (q *Queries) ListTrainingsBetween(ctx context.Context, arg ListTrainingsBet
 		return nil, err
 	}
 	return items, nil
+}
+
+const uncompleteTraining = `-- name: UncompleteTraining :execrows
+UPDATE trainings
+SET completed_at = NULL, feeling = NULL, completion_note = ''
+WHERE id = $1
+`
+
+func (q *Queries) UncompleteTraining(ctx context.Context, id int64) (int64, error) {
+	result, err := q.db.Exec(ctx, uncompleteTraining, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

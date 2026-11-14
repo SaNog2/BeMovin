@@ -51,7 +51,7 @@ func main() {
 
 	s := &http.Server{
 		Addr:    ":" + cfg.Port,
-		Handler: auth.Require(cfg, mux),
+		Handler: auth.Require(cfg, mux, web.ViewerCanWrite),
 	}
 	log.Println("Listening on :" + cfg.Port)
 	log.Fatal(s.ListenAndServe())

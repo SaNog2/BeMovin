@@ -39,6 +39,11 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /trainings/new", h.newTrainingPage)
 	mux.HandleFunc("POST /trainings/new", h.createTraining)
 	mux.HandleFunc("GET /trainings/{id}", h.trainingPage)
+	// The viewer can post to these (see ViewerCanWrite): reject cross-site posts.
+	csrf := http.NewCrossOriginProtection()
+	mux.Handle("POST /trainings/{id}/completion", csrf.Handler(http.HandlerFunc(h.saveCompletion)))
+	mux.Handle("POST /trainings/{id}/comments", csrf.Handler(http.HandlerFunc(h.createComment)))
+	mux.Handle("POST /trainings/{id}/comments/{cid}/delete", csrf.Handler(http.HandlerFunc(h.deleteComment)))
 	mux.HandleFunc("/", h.notFound)
 }
 
@@ -50,6 +55,11 @@ type trainingView struct {
 	Notes   string
 	Blocks  []training.Block
 	Summary training.Summary
+
+	Done           bool
+	CompletedAt    time.Time
+	Feeling        int // 0 = not rated, else 1-5
+	CompletionNote string
 }
 
 func toView(t store.Training) (trainingView, error) {
@@ -64,6 +74,11 @@ func toView(t store.Training) (trainingView, error) {
 		Notes:   t.Notes,
 		Blocks:  blocks,
 		Summary: training.Summarize(blocks),
+
+		Done:           t.CompletedAt.Valid,
+		CompletedAt:    t.CompletedAt.Time,
+		Feeling:        int(t.Feeling.Int16),
+		CompletionNote: t.CompletionNote,
 	}, nil
 }
 

@@ -24,6 +24,7 @@ type sessionView struct {
 	Zones     []int // zones used, for the legend
 	Estimated bool  // some widths come from estimated paces
 	Selected  int   // set selected by default (1-based)
+	Comments  []commentView
 }
 
 type setView struct {

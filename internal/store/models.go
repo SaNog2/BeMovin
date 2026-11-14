@@ -10,11 +10,22 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type Comment struct {
+	ID         int64              `json:"id"`
+	TrainingID int64              `json:"training_id"`
+	Author     string             `json:"author"`
+	Body       string             `json:"body"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+}
+
 type Training struct {
-	ID        int64              `json:"id"`
-	Date      pgtype.Date        `json:"date"`
-	Title     string             `json:"title"`
-	Notes     string             `json:"notes"`
-	Blocks    json.RawMessage    `json:"blocks"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	ID             int64              `json:"id"`
+	Date           pgtype.Date        `json:"date"`
+	Title          string             `json:"title"`
+	Notes          string             `json:"notes"`
+	Blocks         json.RawMessage    `json:"blocks"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	CompletedAt    pgtype.Timestamptz `json:"completed_at"`
+	Feeling        pgtype.Int2        `json:"feeling"`
+	CompletionNote string             `json:"completion_note"`
 }

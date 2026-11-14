@@ -44,6 +44,7 @@ type rowView struct {
 	Bars     []barView
 	StripW   float64 // percent of the longest training this week
 	Selected bool
+	Done     bool
 }
 
 // weekPageData is everything the week page renders.
@@ -145,6 +146,12 @@ func (h *Handler) renderWeek(w http.ResponseWriter, r *http.Request, monday time
 	for _, v := range views {
 		if v.ID == selected {
 			s := newSessionView(v)
+			comments, err := h.q.ListComments(r.Context(), v.ID)
+			if err != nil {
+				h.serverError(w, r, "list comments", err)
+				return
+			}
+			s.Comments = newCommentViews(comments, auth.UserName(r.Context()), data.IsAdmin)
 			data.Session = &s
 		}
 	}
@@ -209,6 +216,7 @@ func buildWeek(monday time.Time, views []trainingView, selected int64, today tim
 				Bars:     bars[v.ID],
 				StripW:   strip,
 				Selected: v.ID == selected,
+				Done:     v.Done,
 			})
 		}
 		w.Days = append(w.Days, d)
